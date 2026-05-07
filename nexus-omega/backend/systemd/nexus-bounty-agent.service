@@ -1,0 +1,11 @@
+[Unit]
+Description=NEXUS OMEGA Bounty Agent (one-shot run)
+After=network.target
+
+[Service]
+User=cryptostoner94
+WorkingDirectory=/home/cryptostoner94/nexus-omega
+EnvironmentFile=-/home/cryptostoner94/nexus-omega/.agent_secrets.env
+ExecStart=/bin/bash /home/cryptostoner94/nexus-omega/backend/run_bounty_agent.sh
+StandardOutput=journal
+StandardError=journal

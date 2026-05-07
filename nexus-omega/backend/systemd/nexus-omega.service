@@ -1,0 +1,16 @@
+[Unit]
+Description=NEXUS OMEGA Backend API (FastAPI/uvicorn)
+After=network.target
+
+[Service]
+User=cryptostoner94
+WorkingDirectory=/home/cryptostoner94/nexus-omega
+EnvironmentFile=-/home/cryptostoner94/nexus-omega/.agent_secrets.env
+ExecStart=/home/cryptostoner94/nexus-omega/.venv/bin/uvicorn backend.api_main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
