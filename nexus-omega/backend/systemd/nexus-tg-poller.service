@@ -1,0 +1,16 @@
+[Unit]
+Description=NEXUS OMEGA Telegram Long-Polling Bot
+After=network.target
+
+[Service]
+User=cryptostoner94
+WorkingDirectory=/home/cryptostoner94/nexus-omega
+EnvironmentFile=-/home/cryptostoner94/nexus-omega/.agent_secrets.env
+ExecStart=/home/cryptostoner94/nexus-omega/.venv/bin/python3 backend/tg_polling_bot.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
