@@ -1,518 +1,183 @@
-import os
-import re
-import json
-import time
-import uuid
-import asyncio
-import traceback
+import os, re, json, time, uuid, asyncio
 from datetime import datetime, timezone
-from typing import List, Optional, Dict, Any
-
+from typing import List, Optional
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel
 
 try:
-    from fastapi.middleware.cors import CORSMiddleware
-except Exception:
-    CORSMiddleware = None
-
-try:
     from playwright.async_api import async_playwright
-    PLAYWRIGHT_AVAILABLE = True
+    PLAYWRIGHT=True
 except Exception:
-    PLAYWRIGHT_AVAILABLE = False
+    PLAYWRIGHT=False
 
-BASE_DIR = "/home/cryptostoner94/nexus-omega"
-ARTIFACT_DIR = os.path.join(BASE_DIR, "artifacts")
-SCREENSHOT_DIR = os.path.join(BASE_DIR, "browser_screens")
+BASE="/home/cryptostoner94/nexus-omega"
+ART=f"{BASE}/artifacts"
+SCR=f"{BASE}/browser_screens"
+os.makedirs(ART,exist_ok=True)
+os.makedirs(SCR,exist_ok=True)
 
-os.makedirs(ARTIFACT_DIR, exist_ok=True)
-os.makedirs(SCREENSHOT_DIR, exist_ok=True)
-
-START_TIME = time.time()
-
-app = FastAPI(title="NEXUS OMEGA Execution Grade", version="10.2-execution")
-
-if CORSMiddleware:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=False,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+app=FastAPI(title="NEXUS OMEGA CLEAN",version="clean-final")
+START=time.time()
 
 class Cmd(BaseModel):
-    command: str
+    command:str
 
 class ResearchTask(BaseModel):
-    goal: str
-    urls: Optional[List[str]] = None
-    niche: Optional[str] = "AI automation"
-    max_urls: int = 4
-    make_report: bool = True
+    goal:str
+    urls:Optional[List[str]]=None
+    niche:Optional[str]="AI automation"
+    max_urls:int=4
+    make_report:bool=True
 
-def now_iso():
+def now():
     return datetime.now(timezone.utc).isoformat()
 
-def clean_text(text: str, limit: int = 12000):
-    return re.sub(r"\s+", " ", text or "").strip()[:limit]
+def urls(x):
+    return re.findall(r"https?://[^\s\"'<>]+",x or "")
 
-def extract_urls(text: str):
-    return re.findall(r"https?://[^\s\"'<>]+", text or "")
+def clean(x,n=10000):
+    return re.sub(r"\s+"," ",x or "").strip()[:n]
 
-async def extract_page(url: str) -> Dict[str, Any]:
-    job_id = f"browser_{int(time.time())}_{uuid.uuid4().hex[:8]}"
-    screenshot_path = os.path.join(SCREENSHOT_DIR, f"{job_id}.png")
-
-    if not PLAYWRIGHT_AVAILABLE:
-        return {"ok": False, "url": url, "error": "Playwright unavailable"}
-
+async def grab(url):
+    jid=f"browser_{int(time.time())}_{uuid.uuid4().hex[:6]}"
+    shot=f"{SCR}/{jid}.png"
+    if not PLAYWRIGHT:
+        return {"ok":False,"url":url,"error":"playwright missing"}
     try:
         async with async_playwright() as p:
-            browser = await p.chromium.launch(
-                headless=True,
-                args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
-            )
-            page = await browser.new_page(
-                viewport={"width": 1365, "height": 900},
-                user_agent="Mozilla/5.0 Chrome/122 Safari/537.36",
-            )
-
-            response = await page.goto(url, wait_until="domcontentloaded", timeout=30000)
-
+            b=await p.chromium.launch(headless=True,args=["--no-sandbox","--disable-dev-shm-usage"])
+            page=await b.new_page(viewport={"width":1365,"height":900})
+            r=await page.goto(url,wait_until="domcontentloaded",timeout=30000)
+            await page.wait_for_timeout(1200)
+            title=await page.title()
             try:
-                await page.wait_for_load_state("networkidle", timeout=10000)
+                text=await page.locator("body").inner_text(timeout=8000)
             except Exception:
-                pass
-
-            await page.wait_for_timeout(1500)
-
-            title = await page.title()
-
+                text=""
             try:
-                body = await page.locator("body").inner_text(timeout=10000)
+                await page.screenshot(path=shot,full_page=True)
             except Exception:
-                body = ""
-
-            try:
-                await page.screenshot(path=screenshot_path, full_page=True)
-            except Exception:
-                screenshot_path = None
-
-            await browser.close()
-
-            return {
-                "ok": True,
-                "id": job_id,
-                "url": url,
-                "status_code": response.status if response else None,
-                "title": title,
-                "text_preview": clean_text(body, 15000),
-                "text_length": len(body or ""),
-                "screenshot": screenshot_path,
-            }
-
+                shot=None
+            await b.close()
+            return {"ok":True,"id":jid,"url":url,"status_code":r.status if r else None,"title":title,"text_preview":clean(text,12000),"text_length":len(text or ""),"screenshot":shot}
     except Exception as e:
-        return {
-            "ok": False,
-            "id": job_id,
-            "url": url,
-            "error": str(e),
-            "trace": traceback.format_exc()[-2000:],
-        }
+        return {"ok":False,"url":url,"error":str(e)}
 
-async def extract_many(urls: List[str], concurrency: int = 2):
-    sem = asyncio.Semaphore(concurrency)
+async def many(items):
+    return await asyncio.gather(*(grab(u) for u in items))
 
-    async def run_one(url):
-        async with sem:
-            return await extract_page(url)
-
-    return await asyncio.gather(*(run_one(u) for u in urls))
-
-def score_text(text: str):
-    t = (text or "").lower()
-    score = 0
-    signals = []
-
-    checks = {
-        "hiring": ["hiring", "jobs", "careers", "support", "operations", "engineer"],
-        "manual_work": ["manual", "spreadsheet", "admin", "email", "workflow", "report"],
-        "automation_fit": ["automation", "agent", "api", "browser", "scrape", "data"],
-        "buyer_pain": ["slow", "delay", "cost", "customer", "scale", "repetitive"],
-        "revenue": ["pricing", "paid", "subscription", "sales", "growth", "client"],
+def score(t):
+    t=(t or "").lower()
+    s=0; sig=[]
+    rules={
+      "hiring":["hiring","jobs","careers"],
+      "manual_work":["manual","spreadsheet","admin","workflow","report"],
+      "automation_fit":["automation","agent","api","browser","data"],
+      "revenue":["pricing","paid","sales","growth"]
     }
+    for k,v in rules.items():
+        if any(w in t for w in v):
+            s+=2; sig.append(k)
+    return min(s,10),sig
 
-    for label, words in checks.items():
-        if any(w in t for w in words):
-            score += 2
-            signals.append(label)
-
-    return min(score, 10), signals
-
-def build_report(goal: str, niche: str, results: List[Dict[str, Any]]):
-    ranked = []
-
-    for r in results:
-        score, signals = score_text(r.get("text_preview", ""))
-        ranked.append({
-            "source": r.get("title") or r.get("url"),
-            "url": r.get("url"),
-            "ok": r.get("ok"),
-            "score": score,
-            "signals": signals,
-            "screenshot": r.get("screenshot"),
-            "pilot_offer": "72-hour automation audit + prototype",
-            "price_range": "$300-$750 pilot",
-            "next_action": "Verify buyer/contact path and send targeted pilot offer",
-            "preview": clean_text(r.get("text_preview", ""), 1200),
-        })
-
-    ranked.sort(key=lambda x: x["score"], reverse=True)
-
-    lines = []
-    lines.append("# NEXUS OMEGA End-to-End Execution Report")
-    lines.append("")
-    lines.append(f"Generated: {now_iso()}")
-    lines.append("")
-    lines.append("## Mission")
-    lines.append(goal)
-    lines.append("")
-    lines.append("## Niche")
-    lines.append(niche)
-    lines.append("")
-    lines.append("## Executive Summary")
-    lines.append(f"- Sources attempted: {len(results)}")
-    lines.append(f"- Successful extractions: {sum(1 for r in results if r.get('ok'))}")
-    lines.append(f"- Failed extractions: {sum(1 for r in results if not r.get('ok'))}")
-    lines.append("- Generated browser screenshots, markdown report, JSON dataset, scoring, and outreach strategy.")
-    lines.append("")
-    lines.append("## Ranked Opportunities")
-    lines.append("")
-    lines.append("| Rank | Source | Score | Signals | Pilot Offer | Price |")
-    lines.append("|---:|---|---:|---|---|---|")
-
-    for i, row in enumerate(ranked, 1):
-        lines.append(f"| {i} | {row['source']} | {row['score']} | {', '.join(row['signals'])} | {row['pilot_offer']} | {row['price_range']} |")
-
-    lines.append("")
-    lines.append("## Top Actions")
-
-    for i, row in enumerate(ranked[:3], 1):
-        lines.append("")
-        lines.append(f"### {i}. {row['source']}")
-        lines.append(f"- URL: {row['url']}")
-        lines.append(f"- Score: {row['score']}/10")
-        lines.append(f"- Signals: {', '.join(row['signals'])}")
-        lines.append(f"- Screenshot: `{row['screenshot']}`")
-        lines.append("- Offer: fixed pilot to automate repetitive browser/API/reporting work.")
-        lines.append("- Pricing: $300-$750 for a 72-hour pilot.")
-        lines.append("- Follow-up: manually verify contact path, then send targeted outreach.")
-        lines.append("")
-        lines.append("Preview:")
-        lines.append("```text")
-        lines.append(row["preview"])
-        lines.append("```")
-
-    lines.append("")
-    lines.append("## Cold Outreach Template")
-    lines.append("")
-    lines.append("Subject: Quick automation pilot for your operations workflow")
-    lines.append("")
-    lines.append("Hi {{name}},")
-    lines.append("")
-    lines.append("I noticed signals that your team may be handling repetitive admin, reporting, support, or workflow tasks manually.")
-    lines.append("")
-    lines.append("I build lightweight browser/API automation pilots that reduce manual work and create usable reports or workflows within 72 hours.")
-    lines.append("")
-    lines.append("Would you be open to a short walkthrough this week?")
-    lines.append("")
-    lines.append("Best,")
-    lines.append("{{your_name}}")
-    lines.append("")
-    lines.append("## Caveat")
-    lines.append("This produces operational intelligence and execution artifacts. Revenue is not guaranteed; manual validation is required.")
-
-    return "\n".join(lines), ranked
-
-APP_HTML = """
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>NEXUS OMEGA</title>
+HTML="""
+<!doctype html><html><head><meta name=viewport content="width=device-width,initial-scale=1">
+<title>NEXUS OMEGA CLEAN</title>
 <style>
-body{margin:0;background:#0d1117;color:#f0f6fc;font-family:Arial}
-header{background:#161b22;padding:18px;border-bottom:1px solid #30363d}
-.tabs{display:flex;flex-wrap:wrap;background:#11161c;border-bottom:1px solid #30363d}
-.tab{padding:13px 16px;cursor:pointer;border-right:1px solid #30363d}
-.tab:hover{background:#1b2330}
-.panel{display:none;padding:20px}
-.active{display:block}
-.card{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:18px;margin-bottom:18px}
-textarea{width:100%;height:180px;background:#010409;color:#58ffb3;border:1px solid #30363d;border-radius:8px;padding:12px}
-button{padding:12px 18px;background:#238636;color:white;border:0;border-radius:8px;cursor:pointer;margin:8px 8px 8px 0}
-pre{background:#010409;color:#d1f7d6;border:1px solid #30363d;border-radius:8px;padding:14px;white-space:pre-wrap;overflow:auto;max-height:520px}
-.small{color:#9da7b3}
-</style>
-</head>
-<body>
-<header>
-<h1>NEXUS OMEGA 10.2</h1>
-<div class="small">Execution-grade browser research, product-team workflow, artifacts, and reports</div>
-</header>
-
-<div class="tabs">
-<div class="tab" onclick="showTab('dash')">Dashboard</div>
-<div class="tab" onclick="showTab('browser')">Browser</div>
-<div class="tab" onclick="showTab('research')">Research</div>
-<div class="tab" onclick="showTab('product')">Product Team</div>
-<div class="tab" onclick="showTab('risk')">Passive Risk Review</div>
-<div class="tab" onclick="showTab('artifacts')">Artifacts</div>
-</div>
-
-<div id="dash" class="panel active">
-<div class="card">
-<h2>Health</h2>
-<button onclick="health()">Check Health</button>
-<button onclick="capabilities()">Capabilities</button>
-<pre id="dashOut">Ready.</pre>
-</div>
-</div>
-
-<div id="browser" class="panel">
-<div class="card">
-<h2>Browser Agent</h2>
-<textarea id="browserCmd">extract https://example.com</textarea>
-<button onclick="browserRun()">Run Browser</button>
-<pre id="browserOut"></pre>
-</div>
-</div>
-
-<div id="research" class="panel">
-<div class="card">
-<h2>Research Agent</h2>
-<textarea id="researchGoal">Act as a real AI execution company. Find operational automation opportunities capable of generating revenue within 14 days.</textarea>
-<button onclick="researchRun()">Run Research</button>
-<pre id="researchOut"></pre>
-</div>
-</div>
-
-<div id="product" class="panel">
-<div class="card">
-<h2>Product Team</h2>
-<textarea id="productGoal">Act as a fully autonomous product and revenue team. Identify one real-world operational opportunity, score it, create a pilot offer, technical implementation plan, outreach strategy, pricing, and execution roadmap.</textarea>
-<button onclick="productRun()">Run Product Team</button>
-<pre id="productOut"></pre>
-</div>
-</div>
-
-<div id="risk" class="panel">
-<div class="card">
-<h2>Passive Risk Review</h2>
-<textarea id="riskGoal">Act as a passive security and operational risk review team. Use public pages only. Identify exposed workflows, outdated operational patterns, public technical signals, and defensive remediation opportunities. Do not exploit, scan aggressively, login, or attack.</textarea>
-<button onclick="riskRun()">Run Passive Review</button>
-<pre id="riskOut"></pre>
-</div>
-</div>
-
-<div id="artifacts" class="panel">
-<div class="card">
-<h2>Artifacts</h2>
-<button onclick="artifactList()">List Artifacts</button>
-<pre id="artifactOut"></pre>
-</div>
-</div>
-
+body{margin:0;background:#070a12;color:#f8fafc;font-family:Arial}
+header{padding:22px;background:#111827}h1{margin:0}
+main{display:grid;grid-template-columns:220px 1fr;min-height:100vh}
+nav{background:#111827;padding:14px}nav div{padding:12px;cursor:pointer;color:#94a3b8;font-weight:bold}
+nav div:hover,.on{background:#1d293b;color:white;border-radius:10px}
+section{display:none;padding:20px}.show{display:block}
+.card{background:#111827;border:1px solid #263244;border-radius:14px;padding:18px;margin-bottom:15px}
+textarea,input{width:100%;background:#030712;color:white;border:1px solid #263244;border-radius:10px;padding:12px}
+textarea{height:170px}button{background:#22c55e;color:white;border:0;border-radius:10px;padding:11px 15px;margin:8px;font-weight:bold}
+pre{background:#030712;border:1px solid #263244;border-radius:12px;padding:14px;white-space:pre-wrap;overflow:auto;max-height:520px}
+#bar{display:none;background:#020617;padding:10px}
+</style></head><body>
+<header><h1>NEXUS OMEGA CLEAN</h1><p>Working dashboard: health, browser, research, product team, crypto workbench, artifacts.</p></header>
+<div id=bar>Working... wait until output appears.</div>
+<main><nav>
+<div class=on onclick="tab('d',this)">Dashboard</div>
+<div onclick="tab('b',this)">Browser</div>
+<div onclick="tab('r',this)">Research</div>
+<div onclick="tab('p',this)">Product Team</div>
+<div onclick="tab('w',this)">Crypto Workbench</div>
+<div onclick="tab('a',this)">Artifacts</div>
+</nav><div>
+<section id=d class=show><div class=card><button onclick=health()>Health</button><button onclick=data()>Capabilities</button><pre id=dout></pre></div></section>
+<section id=b><div class=card><h2>Browser</h2><textarea id=bcmd>extract https://example.com</textarea><button onclick=browserRun()>Run</button><pre id=bout></pre></div></section>
+<section id=r><div class=card><h2>Research</h2><textarea id=rgoal>Act as a real AI execution company. Find operational automation opportunities capable of generating revenue within 14 days.</textarea><button onclick=researchRun()>Run</button><pre id=rout></pre></div></section>
+<section id=p><div class=card><h2>Product Team</h2><textarea id=pgoal>Find one urgent operational pain point, design an MVP, estimate pricing, create outreach copy, and recommend fastest path to first $1000 revenue.</textarea><button onclick=productRun()>Run</button><pre id=pout></pre></div></section>
+<section id=w><div class=card><h2>Crypto Workbench</h2><input id=wallet placeholder="wallet/explorer URL/note"><button onclick=saveWallet()>Save</button><button onclick=walletRun()>Run Intelligence</button><pre id=wout></pre></div></section>
+<section id=a><div class=card><h2>Artifacts</h2><button onclick=artifacts()>List</button><pre id=aout></pre></div></section>
+</div></main>
 <script>
-function showTab(id){
-  document.querySelectorAll(".panel").forEach(p=>p.classList.remove("active"));
-  document.getElementById(id).classList.add("active");
-}
-function print(id,data){
-  document.getElementById(id).textContent = typeof data === "string" ? data : JSON.stringify(data,null,2);
-}
-async function health(){
-  const r=await fetch("/health");
-  print("dashOut",await r.json());
-}
-async function capabilities(){
-  const r=await fetch("/api/data");
-  print("dashOut",await r.json());
-}
-async function browserRun(){
-  const command=document.getElementById("browserCmd").value;
-  const r=await fetch("/api/browser",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({command})});
-  print("browserOut",await r.json());
-}
-async function researchRun(){
-  const goal=document.getElementById("researchGoal").value;
-  const r=await fetch("/api/research",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
-    goal,
-    niche:"AI automation",
-    urls:["https://news.ycombinator.com","https://github.com/trending","https://remoteok.com","https://www.ycombinator.com/companies"],
-    max_urls:4,
-    make_report:true
-  })});
-  print("researchOut",await r.json());
-}
-async function productRun(){
-  const goal=document.getElementById("productGoal").value;
-  const r=await fetch("/api/product-team",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
-    goal,
-    niche:"AI automation agency",
-    urls:["https://news.ycombinator.com","https://github.com/trending","https://remoteok.com","https://www.ycombinator.com/companies"],
-    max_urls:4,
-    make_report:true
-  })});
-  print("productOut",await r.json());
-}
-async function riskRun(){
-  const goal=document.getElementById("riskGoal").value;
-  const r=await fetch("/api/research",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
-    goal,
-    niche:"passive operational risk review",
-    urls:["https://owasp.org","https://github.com/trending","https://news.ycombinator.com"],
-    max_urls:3,
-    make_report:true
-  })});
-  print("riskOut",await r.json());
-}
-async function artifactList(){
-  const r=await fetch("/api/artifacts");
-  print("artifactOut",await r.json());
-}
+let wallets=JSON.parse(localStorage.wallets||"[]");
+function tab(id,e){document.querySelectorAll("section").forEach(x=>x.classList.remove("show"));document.querySelectorAll("nav div").forEach(x=>x.classList.remove("on"));document.getElementById(id).classList.add("show");e.classList.add("on")}
+function show(id,x){document.getElementById(id).textContent=JSON.stringify(x,null,2)}
+async function run(id,fn){bar.style.display="block";try{show(id,await fn())}catch(e){show(id,{ok:false,error:e.message})}bar.style.display="none"}
+async function health(){run("dout",async()=>await(await fetch("/health")).json())}
+async function data(){run("dout",async()=>await(await fetch("/api/data")).json())}
+async function browserRun(){run("bout",async()=>await(await fetch("/api/browser",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({command:bcmd.value})})).json())}
+async function researchRun(){run("rout",async()=>await(await fetch("/api/research",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({goal:rgoal.value,urls:["https://news.ycombinator.com","https://github.com/trending"],max_urls:2,make_report:true})})).json())}
+async function productRun(){run("pout",async()=>await(await fetch("/api/product-team",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({goal:pgoal.value,urls:["https://news.ycombinator.com","https://github.com/trending"],max_urls:2,make_report:true})})).json())}
+function saveWallet(){wallets.push(wallet.value);localStorage.wallets=JSON.stringify(wallets);show("wout",{ok:true,wallets})}
+async function walletRun(){let u=wallets.filter(x=>x.startsWith("http"));if(!u.length){show("wout",{ok:true,message:"Saved locally. Add explorer URL for extraction.",wallets});return}run("wout",async()=>await(await fetch("/api/research",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({goal:"Crypto workbench: "+JSON.stringify(wallets),urls:u,max_urls:4})})).json())}
+async function artifacts(){run("aout",async()=>await(await fetch("/api/artifacts")).json())}
 health();
-</script>
-</body>
-</html>
+</script></body></html>
 """
 
-@app.get("/", response_class=HTMLResponse)
-def root():
-    return APP_HTML
+@app.get("/",response_class=HTMLResponse)
+def root(): return HTML
 
-@app.get("/app", response_class=HTMLResponse)
-def app_ui():
-    return APP_HTML
+@app.get("/app",response_class=HTMLResponse)
+def ui(): return HTML
 
 @app.get("/health")
 def health():
-    return {
-        "ok": True,
-        "status": "LIVE",
-        "uptime": int(time.time() - START_TIME),
-        "playwright": PLAYWRIGHT_AVAILABLE,
-        "timestamp": now_iso(),
-        "version": "10.2-execution",
-    }
-
-@app.get("/api/health")
-def api_health():
-    return health()
+    return {"ok":True,"status":"LIVE","uptime":int(time.time()-START),"playwright":PLAYWRIGHT,"timestamp":now(),"version":"clean-final"}
 
 @app.get("/api/data")
-def api_data():
-    return {
-        "ok": True,
-        "version": "10.2-execution",
-        "routes": ["/", "/app", "/health", "/api/browser", "/api/research", "/api/product-team", "/api/artifacts"],
-        "capabilities": [
-            "browser extraction",
-            "multi-source research",
-            "product-team opportunity scoring",
-            "passive risk review",
-            "screenshots",
-            "markdown reports",
-            "json artifacts",
-            "outreach template",
-            "pilot pricing",
-        ],
-        "artifact_dir": ARTIFACT_DIR,
-        "screenshot_dir": SCREENSHOT_DIR,
-    }
-
-@app.post("/api/exec")
-def exec_cmd(cmd: Cmd):
-    c = cmd.command.lower().strip()
-    if c in ["health", "status"]:
-        return health()
-    if c in ["help", "capabilities"]:
-        return api_data()
-    return {"ok": True, "message": "Exec restricted. Use browser/research/product-team.", "received": cmd.command}
+def data():
+    return {"ok":True,"routes":["/","/app","/health","/api/browser","/api/research","/api/product-team","/api/artifacts"],"capabilities":["browser extraction","research reports","product-team workflow","crypto workbench","artifacts"]}
 
 @app.post("/api/browser")
-async def browser_cmd(cmd: Cmd):
-    urls = extract_urls(cmd.command)
-    if not urls:
-        return {"ok": False, "status": "NEEDS_URL", "example": "extract https://example.com"}
-    results = await extract_many(urls[:3], concurrency=2)
-    return results[0] if len(results) == 1 else {"ok": True, "count": len(results), "results": results}
+async def browser(c:Cmd):
+    u=urls(c.command)
+    if not u: return {"ok":False,"example":"extract https://example.com"}
+    r=await many(u[:3])
+    return r[0] if len(r)==1 else {"ok":True,"results":r}
 
 @app.post("/api/research")
-async def research(task: ResearchTask):
-    urls = task.urls or extract_urls(task.goal)
-    if not urls:
-        urls = ["https://news.ycombinator.com", "https://github.com/trending", "https://remoteok.com", "https://www.ycombinator.com/companies"]
-    urls = urls[:task.max_urls]
-
-    results = await extract_many(urls, concurrency=2)
-    report, ranked = build_report(task.goal, task.niche or "general", results)
-
-    job_id = f"research_{int(time.time())}_{uuid.uuid4().hex[:8]}"
-    report_path = os.path.join(ARTIFACT_DIR, f"{job_id}.md")
-    json_path = os.path.join(ARTIFACT_DIR, f"{job_id}.json")
-
-    payload = {
-        "ok": True,
-        "id": job_id,
-        "goal": task.goal,
-        "niche": task.niche,
-        "urls": urls,
-        "results": results,
-        "ranked": ranked,
-        "report_path": report_path,
-        "json_path": json_path,
-        "created_at": now_iso(),
-    }
-
-    with open(report_path, "w", encoding="utf-8") as f:
-        f.write(report)
-
-    with open(json_path, "w", encoding="utf-8") as f:
-        json.dump(payload, f, indent=2)
-
-    return {
-        "ok": True,
-        "id": job_id,
-        "attempted_urls": urls,
-        "successful_extractions": sum(1 for r in results if r.get("ok")),
-        "failed_extractions": sum(1 for r in results if not r.get("ok")),
-        "report_path": report_path,
-        "json_path": json_path,
-        "preview": report[:2500],
-    }
+async def research(t:ResearchTask):
+    u=(t.urls or urls(t.goal) or ["https://news.ycombinator.com"])[:t.max_urls]
+    results=await many(u)
+    rows=[]
+    for r in results:
+        sc,sig=score(r.get("text_preview",""))
+        rows.append({"source":r.get("title") or r.get("url"),"url":r.get("url"),"score":sc,"signals":sig,"screenshot":r.get("screenshot")})
+    md="# NEXUS OMEGA REPORT\\n\\nGoal: "+t.goal+"\\n\\n"+json.dumps(rows,indent=2)
+    jid=f"research_{int(time.time())}_{uuid.uuid4().hex[:6]}"
+    mp=f"{ART}/{jid}.md"; jp=f"{ART}/{jid}.json"
+    payload={"ok":True,"id":jid,"attempted_urls":u,"successful_extractions":sum(1 for r in results if r.get("ok")),"failed_extractions":sum(1 for r in results if not r.get("ok")),"report_path":mp,"json_path":jp,"ranked":rows,"results":results,"preview":md[:2000]}
+    open(mp,"w").write(md)
+    open(jp,"w").write(json.dumps(payload,indent=2))
+    return payload
 
 @app.post("/api/product-team")
-async def product_team(task: ResearchTask):
-    return await research(task)
+async def product(t:ResearchTask):
+    return await research(t)
 
 @app.get("/api/artifacts")
 def artifacts():
-    files = []
-    for name in sorted(os.listdir(ARTIFACT_DIR), reverse=True):
-        path = os.path.join(ARTIFACT_DIR, name)
-        if os.path.isfile(path):
-            files.append({"name": name, "size": os.path.getsize(path), "path": path})
-    return {"ok": True, "count": len(files), "files": files[:50]}
+    files=[{"name":n,"path":f"{ART}/{n}","size":os.path.getsize(f"{ART}/{n}")} for n in sorted(os.listdir(ART),reverse=True) if os.path.isfile(f"{ART}/{n}")]
+    return {"ok":True,"count":len(files),"files":files[:50]}
 
 @app.get("/api/artifact/{name}")
-def artifact(name: str):
-    safe = os.path.basename(name)
-    path = os.path.join(ARTIFACT_DIR, safe)
-    if not os.path.exists(path):
-        return {"ok": False, "error": "artifact not found"}
-    return FileResponse(path)
+def artifact(name:str):
+    p=f"{ART}/{os.path.basename(name)}"
+    return FileResponse(p) if os.path.exists(p) else {"ok":False,"error":"not found"}
