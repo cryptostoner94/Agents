@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+pydantic
+playwright
+requests
+httpx
+aiofiles
+beautifulsoup4
+lxml
+python-telegram-bot
