@@ -1,5 +1,4 @@
 <<<<<<< HEAD
-<<<<<<< HEAD
 import os, time
 from pathlib import Path
 from typing import Optional
@@ -83,8 +82,6 @@ def artifact(name: str):
     if not p.exists(): return {"ok":False,"error":"not found"}
     return FileResponse(str(p))
 =======
-=======
->>>>>>> a184e838ce49b0b8d0c43e092b1d740e7245275c
 import os
 import re
 import json
@@ -535,7 +532,4 @@ def data():
             "screenshots",
         ],
     }
-<<<<<<< HEAD
 >>>>>>> 1b2cdf6b929ec30998e89b432c04cbe093b52f38
-=======
->>>>>>> a184e838ce49b0b8d0c43e092b1d740e7245275c

@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>NEXUS OMEGA 10</title>
+
+<style>
+body{
+  margin:0;
+  font-family:Arial;
+  background:#0d1117;
+  color:#f0f6fc;
+}
+
+header{
+  padding:20px;
+  background:#161b22;
+  border-bottom:1px solid #30363d;
+}
+
+h1{
+  margin:0;
+}
+
+.tabs{
+  display:flex;
+  background:#11161c;
+  border-bottom:1px solid #30363d;
+}
+
+.tab{
+  padding:14px 18px;
+  cursor:pointer;
+  border-right:1px solid #30363d;
+}
+
+.tab:hover{
+  background:#1b2330;
+}
+
+.panel{
+  display:none;
+  padding:20px;
+}
+
+.active{
+  display:block;
+}
+
+textarea{
+  width:100%;
+  height:220px;
+  background:#010409;
+  color:#58ffb3;
+  border:1px solid #30363d;
+  border-radius:8px;
+  padding:12px;
+}
+
+button{
+  margin-top:12px;
+  padding:12px 18px;
+  background:#238636;
+  border:0;
+  color:white;
+  border-radius:8px;
+  cursor:pointer;
+  font-weight:bold;
+}
+
+button:hover{
+  opacity:0.9;
+}
+
+pre{
+  background:#010409;
+  border:1px solid #30363d;
+  padding:16px;
+  border-radius:8px;
+  overflow:auto;
+  white-space:pre-wrap;
+}
+
+.card{
+  background:#161b22;
+  padding:18px;
+  border-radius:12px;
+  border:1px solid #30363d;
+  margin-bottom:20px;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+<h1>NEXUS OMEGA 10.0</h1>
+<div>Autonomous Operational Research + Product Team + Browser Intelligence</div>
+</header>
+
+<div class="tabs">
+<div class="tab" onclick="showTab('dashboard')">Dashboard</div>
+<div class="tab" onclick="showTab('browser')">Browser Agent</div>
+<div class="tab" onclick="showTab('research')">Research</div>
+<div class="tab" onclick="showTab('product')">Product Team</div>
+<div class="tab" onclick="showTab('bounty')">Bug Bounty</div>
+<div class="tab" onclick="showTab('prompts')">Master Prompts</div>
+</div>
+
+<div id="dashboard" class="panel active">
+<div class="card">
+<h2>System Health</h2>
+<button onclick="health()">Check Health</button>
+<pre id="healthOut"></pre>
+</div>
+</div>
+
+<div id="browser" class="panel">
+<div class="card">
+<h2>Browser Extraction</h2>
+
+<textarea id="browserCmd">extract https://example.com</textarea>
+
+<button onclick="browserRun()">Run Browser Agent</button>
+
+<pre id="browserOut"></pre>
+</div>
+</div>
+
+<div id="research" class="panel">
+<div class="card">
+<h2>Real-World Research</h2>
+
+<textarea id="researchGoal">
+Act as a real-time operational intelligence system. Identify revenue-generating AI automation opportunities for solo operators.
+</textarea>
+
+<button onclick="runResearch()">Run Research</button>
+
+<pre id="researchOut"></pre>
+</div>
+</div>
+
+<div id="product" class="panel">
+<div class="card">
+<h2>Product Team Execution</h2>
+
+<textarea id="productGoal">
+Act as a fully autonomous AI execution company operating in 2026. Produce a complete operational execution package including revenue opportunities, automation systems, technical architecture, operational scoring, outreach strategy, and implementation roadmap.
+</textarea>
+
+<button onclick="runProduct()">Run Product Team</button>
+
+<pre id="productOut"></pre>
+</div>
+</div>
+
+<div id="bounty" class="panel">
+<div class="card">
+<h2>Bug Bounty Simulation</h2>
+
+<textarea id="bountyGoal">
+Act as a security research team. Analyze public SaaS products, exposed admin panels, workflow automation systems, operational misconfigurations, and authentication weaknesses. Produce a defensive operational risk assessment and monetizable consulting opportunities.
+</textarea>
+
+<button onclick="runBounty()">Run Bounty Research</button>
+
+<pre id="bountyOut"></pre>
+</div>
+</div>
+
+<div id="prompts" class="panel">
+<div class="card">
+<h2>9.5+ Difficulty Master Prompt</h2>
+
+<pre>
+Act as a fully autonomous AI execution company operating in 2026.
+
+You are simultaneously:
+- product team
+- automation engineering team
+- operational intelligence team
+- technical architecture team
+- market intelligence team
+- security research team
+- revenue operations team
+
+MISSION:
+Identify real-world operational inefficiencies that can be automated using browser workflows, APIs, AI systems, or operational intelligence.
+
+Generate:
+- market intelligence
+- opportunity scoring
+- operational architecture
+- automation pipeline
+- outreach strategy
+- implementation roadmap
+- deployment recommendations
+- revenue forecast
+- technical risks
+- operational risks
+- browser extraction evidence
+- screenshots
+- final executive report
+
+Constraints:
+- solo operator
+- under $500 infrastructure
+- deploy within 72 hours
+- real public data only
+- no fabricated companies
+- practical execution only
+</pre>
+</div>
+</div>
+
+<script>
+const API="http://136.114.174.54:8000";
+
+function showTab(id){
+  document.querySelectorAll(".panel").forEach(p=>p.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+}
+
+async function health(){
+  const r=await fetch(API+"/health");
+  document.getElementById("healthOut").textContent=
+    JSON.stringify(await r.json(),null,2);
+}
+
+async function browserRun(){
+  const command=document.getElementById("browserCmd").value;
+
+  const r=await fetch(API+"/api/browser",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({command})
+  });
+
+  document.getElementById("browserOut").textContent=
+    JSON.stringify(await r.json(),null,2);
+}
+
+async function runResearch(){
+  const goal=document.getElementById("researchGoal").value;
+
+  const r=await fetch(API+"/api/research",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      goal,
+      urls:[
+        "https://news.ycombinator.com",
+        "https://github.com/trending",
+        "https://remoteok.com",
+        "https://www.ycombinator.com/companies"
+      ],
+      max_urls:4,
+      make_report:true
+    })
+  });
+
+  document.getElementById("researchOut").textContent=
+    JSON.stringify(await r.json(),null,2);
+}
+
+async function runProduct(){
+  const goal=document.getElementById("productGoal").value;
+
+  const r=await fetch(API+"/api/product-team",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      goal,
+      niche:"AI automation",
+      urls:[
+        "https://news.ycombinator.com",
+        "https://github.com/trending",
+        "https://remoteok.com",
+        "https://www.producthunt.com"
+      ],
+      max_urls:4,
+      make_report:true
+    })
+  });
+
+  document.getElementById("productOut").textContent=
+    JSON.stringify(await r.json(),null,2);
+}
+
+async function runBounty(){
+  const goal=document.getElementById("bountyGoal").value;
+
+  const r=await fetch(API+"/api/research",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      goal,
+      urls:[
+        "https://news.ycombinator.com",
+        "https://github.com/trending",
+        "https://owasp.org"
+      ],
+      max_urls:3,
+      make_report:true
+    })
+  });
+
+  document.getElementById("bountyOut").textContent=
+    JSON.stringify(await r.json(),null,2);
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,10 @@
+[Unit]
+Description=NEXUS OMEGA Bounty Agent Timer (every 45 minutes)
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=45min
+Unit=nexus-bounty-agent.service
+
+[Install]
+WantedBy=timers.target
