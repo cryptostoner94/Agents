@@ -181,3 +181,66 @@ def artifacts():
 def artifact(name:str):
     p=f"{ART}/{os.path.basename(name)}"
     return FileResponse(p) if os.path.exists(p) else {"ok":False,"error":"not found"}
+
+
+
+CHAT_HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NEXUS OMEGA CHAT</title>
+<style>
+body{margin:0;background:#070a12;color:#f8fafc;font-family:Arial;padding:22px}
+.card{max-width:1100px;margin:auto;background:#111827;border:1px solid #263244;border-radius:18px;padding:22px}
+textarea{width:100%;height:220px;background:#030712;color:#f8fafc;border:1px solid #263244;border-radius:14px;padding:14px;font-size:16px}
+button{padding:14px 20px;border:0;border-radius:12px;background:#22c55e;color:white;font-weight:900;margin:10px 8px 10px 0}
+pre{background:#030712;border:1px solid #263244;border-radius:14px;padding:16px;white-space:pre-wrap;overflow:auto;max-height:520px}
+#loading{display:none;background:#1d293b;padding:12px;border-radius:12px;margin:12px 0}
+</style>
+</head>
+<body>
+<div class="card">
+<h1>NEXUS OMEGA CHAT COMMAND CENTER</h1>
+<p>Type any objective, workflow, automation task, URL extraction, product-team task, or research command below.</p>
+
+<textarea id="prompt">Act as a real AI execution company. Find one operational automation opportunity capable of generating revenue within 14 days. Produce scoring, implementation plan, outreach angle, and artifact report.</textarea>
+
+<br>
+<button onclick="send()">Run Command</button>
+<button onclick="health()">Health</button>
+<button onclick="load95()">Load 9.5 Test Prompt</button>
+
+<div id="loading">Working... do not submit again until output appears.</div>
+<pre id="out">Ready.</pre>
+</div>
+
+<script>
+let busy=false;
+function setBusy(v){busy=v;loading.style.display=v?"block":"none";document.querySelectorAll("button").forEach(b=>b.disabled=v)}
+async function send(){
+ if(busy)return;
+ setBusy(true);
+ try{
+   const r=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:prompt.value})});
+   out.textContent=JSON.stringify(await r.json(),null,2);
+ }catch(e){out.textContent=JSON.stringify({ok:false,error:e.message},null,2)}
+ setBusy(false);
+}
+async function health(){
+ const r=await fetch("/health");
+ out.textContent=JSON.stringify(await r.json(),null,2);
+}
+function load95(){
+ prompt.value="Act as a fully autonomous AI execution company operating in 2026. Identify one real-world operational opportunity capable of generating revenue within 14 days using browser automation, APIs, AI workflows, or operational intelligence. Generate market intelligence, opportunity scoring, technical architecture, deployment strategy, automation flow, customer acquisition strategy, outreach strategy, pricing model, pilot scope, risks, screenshots, JSON artifact, and markdown report. Constraints: solo operator, under $500 infrastructure, deployable within 72 hours, real public data only, practical execution only.";
+}
+</script>
+</body>
+</html>
+"""
+
+
+@app.get("/chat", response_class=HTMLResponse)
+def chat_page():
+    return CHAT_HTML
