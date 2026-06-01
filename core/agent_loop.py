@@ -1,12 +1,12 @@
-import time, uuid
+import time, uuid, os
 from pathlib import Path
 from core.memory import log_event
 from core.policy import check_text
 from core.browser_operator import extract_page, extract_urls
 from core.code_sandbox import run_python
 from core.shell_runner import run_shell
- 
-BASE = Path("/opt/nexus-omega")
+
+BASE = Path(os.getenv("NEXUS_BASE", "./data"))
 ART = BASE / "artifacts"
 ART.mkdir(parents=True, exist_ok=True)
 DEFAULT_RESEARCH = ["https://news.ycombinator.com", "https://github.com/trending"]

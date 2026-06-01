@@ -1,57 +1,63 @@
 #!/usr/bin/env bash
+# NEXUS OMEGA - Quick Start Script
+# Runs the AI agent platform locally with zero configuration
+
 set -e
 
-APP="/home/cryptostoner94/nexus-omega"
-USER_NAME="cryptostoner94"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR"
 
-sudo systemctl stop nexus-omega || true
-sudo mkdir -p "$APP/artifacts" "$APP/browser_screens"
-
-sudo cp api_main.py "$APP/api_main.py"
-
-sudo chown -R "$USER_NAME:$USER_NAME" "$APP"
-
-cd "$APP"
-python3 -m venv .venv
-. .venv/bin/activate
-
-pip install --upgrade pip
-pip install fastapi uvicorn pydantic playwright
-python -m playwright install chromium || true
-
-python -m py_compile api_main.py
-
-sudo tee /etc/systemd/system/nexus-omega.service >/dev/null <<EOF
-[Unit]
-Description=NEXUS OMEGA CLEAN CHAT FINAL
-After=network-online.target
-
-[Service]
-Type=simple
-User=cryptostoner94
-WorkingDirectory=/home/cryptostoner94/nexus-omega
-ExecStart=/home/cryptostoner94/nexus-omega/.venv/bin/uvicorn api_main:app --host 0.0.0.0 --port 8000
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-sudo systemctl daemon-reload
-sudo systemctl enable nexus-omega
-sudo systemctl restart nexus-omega
-
-sleep 5
-
-echo "HEALTH"
-curl -s http://127.0.0.1:8000/health
+echo "========================================="
+echo "  NEXUS OMEGA - AI Agent Command Center"
+echo "========================================="
 echo ""
 
-echo "CHAT TEST"
-curl -s -X POST http://127.0.0.1:8000/api/chat \
--H "Content-Type: application/json" \
--d '{"message":"health status"}'
+# Create data directories
+mkdir -p data/artifacts data/browser_screens data/state/sandbox
+
+# Check Python
+if ! command -v python3 &> /dev/null; then
+    echo "ERROR: Python 3 is required but not installed."
+    exit 1
+fi
+
+# Check pip
+if ! python3 -m pip --version &> /dev/null; then
+    echo "ERROR: pip is required but not installed."
+    exit 1
+fi
+
+# Install dependencies
+echo "[1/4] Installing dependencies..."
+if [ -f requirements.txt ]; then
+    python3 -m pip install --upgrade pip -q
+    python3 -m pip install -r requirements.txt -q
+fi
+
+# Install playwright browser
+echo "[2/4] Installing Playwright Chromium..."
+python3 -m playwright install chromium 2>/dev/null || echo "  (Playwright install skipped - may need root)"
+
+# Check syntax
+echo "[3/4] Verifying code..."
+python3 -m py_compile api_main.py
+python3 -m py_compile core/agent_loop.py
+python3 -m py_compile core/browser_operator.py
+python3 -m py_compile core/code_sandbox.py
+python3 -m py_compile core/shell_runner.py
+python3 -m py_compile core/memory.py
+python3 -m py_compile core/policy.py
+echo "  All modules OK"
+
+# Start the server
+echo "[4/4] Starting NEXUS OMEGA..."
+PORT="${PORT:-8000}"
+echo ""
+echo "========================================="
+echo "  NEXUS OMEGA is starting..."
+echo "  Open: http://localhost:$PORT/chat"
+echo "  Health: http://localhost:$PORT/health"
+echo "========================================="
 echo ""
 
-echo "OPEN: http://136.114.174.54:8000/chat"
+python3 -m uvicorn api_main:app --host 0.0.0.0 --port "$PORT" --reload

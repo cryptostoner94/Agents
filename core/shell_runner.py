@@ -1,3 +1,4 @@
+import os
 import subprocess
 from core.policy import shell_allowed
  

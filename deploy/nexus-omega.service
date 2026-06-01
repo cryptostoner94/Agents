@@ -1,0 +1,26 @@
+[Unit]
+Description=NEXUS OMEGA AI Agent Platform
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/nexus-omega
+Environment="NEXUS_BASE=/opt/nexus-omega/data"
+Environment="PORT=8000"
+EnvironmentFile=-/opt/nexus-omega/.env
+ExecStart=/usr/bin/python3 -m uvicorn api_main:app --host 0.0.0.0 --port 8000 --workers 2
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/nexus-omega/data
+
+[Install]
+WantedBy=multi-user.target

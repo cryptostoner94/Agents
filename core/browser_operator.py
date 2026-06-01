@@ -1,4 +1,4 @@
-import re, time, uuid
+import re, time, uuid, os
 from pathlib import Path
  
 try:
@@ -6,8 +6,8 @@ try:
     PLAYWRIGHT = True
 except Exception:
     PLAYWRIGHT = False
- 
-BASE = Path("/opt/nexus-omega")
+
+BASE = Path(os.getenv("NEXUS_BASE", "./data"))
 SCR = BASE / "browser_screens"
 SCR.mkdir(parents=True, exist_ok=True)
  

@@ -1,306 +1,201 @@
-<<<<<<< HEAD
-<<<<<<< HEAD
-import os, time
-from pathlib import Path
-from typing import Optional
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse, FileResponse
-from pydantic import BaseModel
-from core.agent_loop import run_agent
-from core.browser_operator import extract_page, click_by_text
-from core.code_sandbox import run_python
-from core.shell_runner import run_shell
-from core.memory import recent
- 
-BASE = Path("/opt/nexus-omega")
-ART = BASE / "artifacts"
-ART.mkdir(parents=True, exist_ok=True)
-START = time.time()
-app = FastAPI(title="NEXUS OMEGA", version="16.0-complete")
-class ChatTask(BaseModel): message: str = ""
-class BrowserTask(BaseModel): url: str; click_text: Optional[str] = None
-class CodeTask(BaseModel): code: str
-class ShellTask(BaseModel): command: str
-HTML = r'''
-<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>NEXUS OMEGA</title><style>
-:root{--bg:#121923;--bg2:#1b2637;--panel:rgba(28,38,55,.84);--glass:rgba(255,255,255,.075);--line:rgba(255,255,255,.12);--text:#f8fafc;--muted:#9aa7b8;--blue:#38bdf8;--violet:#8b5cf6;--green:#22c55e;--input:rgba(6,10,18,.66);--shadow:0 24px 80px rgba(0,0,0,.34)}body.light{--bg:#eef3fb;--bg2:#fff;--panel:rgba(255,255,255,.82);--glass:rgba(255,255,255,.9);--line:rgba(15,23,42,.10);--text:#0f172a;--muted:#64748b;--input:rgba(255,255,255,.92);--shadow:0 24px 70px rgba(15,23,42,.12)}*{box-sizing:border-box}html,body{height:100%}body{margin:0;color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Arial,sans-serif;background:radial-gradient(circle at 18% 6%,rgba(56,189,248,.22),transparent 28%),radial-gradient(circle at 82% 14%,rgba(139,92,246,.20),transparent 28%),linear-gradient(145deg,var(--bg),var(--bg2))}.shell{display:grid;grid-template-columns:280px 1fr;min-height:100vh;padding:18px;gap:18px}.sidebar,.main,.card,.mobile-card{border:1px solid var(--line);background:var(--panel);backdrop-filter:blur(24px);border-radius:30px;box-shadow:var(--shadow)}.sidebar{padding:18px;display:flex;flex-direction:column;gap:16px}.brand{display:flex;gap:12px;align-items:center;padding:10px 8px 18px}.orb{width:52px;height:52px;border-radius:50%;background:radial-gradient(circle,rgba(56,189,248,.9),transparent 34%),conic-gradient(#38bdf8,#8b5cf6,#22c55e,#38bdf8);box-shadow:0 0 38px rgba(56,189,248,.45)}.logo-title{font-weight:900;letter-spacing:.08em}.logo-sub{font-size:12px;color:var(--muted);letter-spacing:.28em}.nav button{width:100%;display:flex;gap:12px;padding:13px 14px;border:0;border-radius:16px;margin:4px 0;color:var(--text);background:transparent;cursor:pointer;font-weight:800;text-align:left}.nav button.active,.nav button:hover{background:linear-gradient(135deg,rgba(56,189,248,.18),rgba(139,92,246,.20))}.profile{margin-top:auto;border:1px solid var(--line);background:var(--glass);border-radius:22px;padding:14px}.mode-toggle{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}.mode-toggle button{padding:11px;border-radius:14px;border:1px solid var(--line);background:var(--input);color:var(--text);font-weight:800}.main{overflow:hidden}.topbar{display:flex;justify-content:space-between;gap:16px;padding:22px 24px;border-bottom:1px solid var(--line)}h1{margin:0;font-size:30px}.caption{color:var(--muted);font-size:14px;margin-top:5px}.status-row{display:flex;gap:9px;flex-wrap:wrap}.chip{border:1px solid var(--line);background:var(--glass);padding:9px 12px;border-radius:999px;font-size:12px;font-weight:800}.good{color:#86efac}.content{padding:24px;display:grid;grid-template-columns:1.35fr .85fr;gap:18px}.card{padding:18px;border-radius:24px;margin-bottom:18px}.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}.metric{border:1px solid var(--line);background:var(--glass);border-radius:20px;padding:18px}.value{font-size:30px;font-weight:900}.timeline{position:relative;padding-left:26px}.timeline:before{content:"";position:absolute;left:8px;top:7px;bottom:7px;width:2px;background:linear-gradient(var(--blue),var(--violet),#f59e0b)}.step{position:relative;padding:13px 14px;border-radius:16px;margin-bottom:10px;background:rgba(255,255,255,.055)}.step:before{content:"";position:absolute;left:-23px;top:18px;width:12px;height:12px;border-radius:50%;background:var(--blue);box-shadow:0 0 18px var(--blue)}.step.active{background:linear-gradient(135deg,rgba(56,189,248,.16),rgba(139,92,246,.18))}.tools{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.tool{border:1px solid var(--line);background:var(--glass);border-radius:18px;padding:15px;cursor:pointer}.tool span{font-size:12px;color:var(--muted)}textarea,input{width:100%;border:1px solid var(--line);background:var(--input);color:var(--text);border-radius:18px;padding:15px;font-size:15px;margin-bottom:10px}
-textarea{
-height:340px;
-min-height:340px;
-resize:vertical;
-line-height:1.5;
-white-space:pre-wrap;
-word-break:break-word;
-overflow-wrap:anywhere;
-font-size:16px
-}
-.primary,.secondary{border:0;border-radius:16px;padding:13px 17px;color:white;font-weight:900;cursor:pointer}.primary{background:linear-gradient(135deg,#2563eb,#8b5cf6)}.secondary{background:rgba(255,255,255,.12);border:1px solid var(--line);color:var(--text)}.output{margin-top:14px;max-height:420px;overflow:auto;white-space:pre-wrap;border:1px solid var(--line);background:rgba(3,7,18,.46);border-radius:18px;padding:16px;font-family:monospace;font-size:12px}.loader{display:none;margin-top:14px}.loader.show{display:block}.bar{height:10px;border-radius:999px;background:linear-gradient(90deg,#38bdf8,#8b5cf6,#22c55e);animation:p 1.25s infinite}@keyframes p{0%{width:10%}50%{width:82%}100%{width:98%}}.panel{display:none}.panel.active{display:block}.mobile-shell{display:none}@media(max-width:900px){.shell{display:none}.mobile-shell{display:block;min-height:100vh;padding:env(safe-area-inset-top) 18px 18px}.mobile-top{display:flex;align-items:center;justify-content:space-between;padding:18px 0 14px}.round{width:54px;height:54px;border-radius:50%;border:1px solid var(--line);background:var(--glass);color:var(--text);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:900}.mobile-title{text-align:center;font-weight:900}.credit-pill{border:1px solid var(--line);background:var(--glass);border-radius:999px;padding:14px 18px;font-weight:900}.mobile-card{border-radius:28px;padding:18px;margin:14px 0}.quick-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.quick{border:1px solid var(--line);background:var(--glass);border-radius:18px;padding:15px}.composer{position:fixed;left:16px;right:16px;bottom:calc(16px + env(safe-area-inset-bottom));border:1px solid var(--line);background:rgba(20,28,42,.86);backdrop-filter:blur(24px);border-radius:28px;padding:12px;box-shadow:var(--shadow)}body.light .composer{background:rgba(255,255,255,.86)}.composer-row{display:flex;gap:10px;align-items:center}
-.composer input{
-margin:0;
-min-height:90px;
-padding:18px;
-font-size:16px;
-line-height:1.5;
-white-space:pre-wrap;
-overflow-wrap:anywhere
-}
-.send{width:48px;height:48px;border-radius:50%;border:0;background:linear-gradient(135deg,#2563eb,#8b5cf6);color:white;font-weight:900}.mobile-output{margin-bottom:150px;white-space:pre-wrap;font-size:12px;font-family:monospace}}
-</style></head><body><div class="shell"><aside class="sidebar"><div class="brand"><div class="orb"></div><div><div class="logo-title">NEXUS</div><div class="logo-sub">OMEGA</div></div></div><div class="nav"><button class="active" onclick="desktopTab('overview',this)">Overview</button><button onclick="desktopTab('agent',this)">Agent</button><button onclick="desktopTab('browser',this)">Browser Operator</button><button onclick="desktopTab('code',this)">CodeAct</button><button onclick="desktopTab('shell',this)">Safe Shell</button><button onclick="desktopTab('memory',this);memory()">Memory</button><button onclick="artifacts()">Artifacts</button><button onclick="desktopTab('settings',this)">Settings</button></div><div class="profile"><b>Operator</b><div class="caption">NEXUS OMEGA Complete</div><div class="mode-toggle"><button onclick="setTheme('dark')">Dark</button><button onclick="setTheme('light')">Light</button></div></div></aside><main class="main"><div class="topbar"><div><h1>NEXUS OMEGA Command Center</h1><div class="caption">Apple polished - cyber enhanced - autonomous execution OS</div></div><div class="status-row"><span class="chip good">VM Online</span><span class="chip good">Playwright Active</span><span class="chip">Memory Connected</span><span class="chip good">Agent Live</span></div></div><div class="content"><section><div id="overview" class="panel active"><div class="metrics"><div class="metric"><div>Tasks</div><div class="value">Live</div></div><div class="metric"><div>Browser</div><div class="value">On</div></div><div class="metric"><div>CodeAct</div><div class="value">On</div></div><div class="metric"><div>Memory</div><div class="value">On</div></div></div><div class="card"><h2>Live Execution</h2><div class="timeline"><div class="step">Planning execution</div><div class="step">Browser Operator</div><div class="step active">CodeAct</div><div class="step">Memory</div><div class="step">Artifacts</div></div></div></div><div id="agent" class="panel"><div class="card"><h2>Autonomous Agent</h2><textarea id="agent_msg">Find one AI automation opportunity that can generate revenue in 14 days and create a pilot execution plan.</textarea><button class="primary" onclick="runAgent()">Run Agent</button> <button class="secondary" onclick="loadPrompt()">Load 9.5 Prompt</button></div></div><div id="browser" class="panel"><div class="card"><h2>Browser Operator</h2><input id="browser_url" value="https://example.com"><input id="click_text" placeholder="optional click text"><button class="primary" onclick="runBrowser()">Run Browser</button></div></div><div id="code" class="panel"><div class="card"><h2>CodeAct Sandbox</h2><textarea id="code_text">print("CODEACT_OK")</textarea><button class="primary" onclick="runCode()">Run Code</button></div></div><div id="shell" class="panel"><div class="card"><h2>Safe Shell</h2><input id="shell_cmd" value="curl http://127.0.0.1:8000/health"><button class="primary" onclick="runShell()">Run Shell</button></div></div><div id="memory" class="panel"><div class="card"><h2>Persistent Memory</h2><button class="primary" onclick="memory()">Refresh Memory</button></div></div><div id="settings" class="panel"><div class="card"><h2>Settings</h2><p class="caption">Theme, shell policy, memory, Telegram and system configuration.</p></div></div><div id="loader" class="loader"><div class="bar"></div></div><pre id="out" class="output">Ready.</pre></section><aside><div class="card"><h3>Quick Actions</h3><div class="tools"><div class="tool" onclick="desktopTab('agent')"><b>Agent</b><span>Run autonomous tasks</span></div><div class="tool" onclick="desktopTab('browser')"><b>Browser</b><span>Extract data</span></div><div class="tool" onclick="desktopTab('code')"><b>CodeAct</b><span>Python sandbox</span></div><div class="tool" onclick="desktopTab('shell')"><b>Shell</b><span>Allowlisted commands</span></div></div></div><div class="card"><h3>System Health</h3><div class="step">All systems operational</div><div class="step">Memory database connected</div><div class="step">Browser automation active</div></div></aside></div></main></div><div class="mobile-shell"><div class="mobile-top"><div class="round">+</div><div class="mobile-title">NEXUS OMEGA</div><div class="credit-pill">AI</div></div><div class="mobile-card"><div class="orb" style="margin:auto"></div><h3>Quick Actions</h3><div class="quick-grid"><div class="quick" onclick="mobileFill('Find one AI automation opportunity and create a 72-hour pilot plan')"><b>Agent</b><br><span class="caption">Run task</span></div><div class="quick" onclick="mobileFill('Extract https://example.com')"><b>Browser</b><br><span class="caption">Extract web</span></div><div class="quick" onclick="mobileFill('python: print(2+2)')"><b>CodeAct</b><br><span class="caption">Run code</span></div><div class="quick" onclick="mobileFill('shell: curl http://127.0.0.1:8000/health')"><b>Shell</b><br><span class="caption">Safe command</span></div></div></div><div class="mobile-card"><h3>Task Execution</h3><div class="timeline"><div class="step">Planning execution</div><div class="step">Browser Operator</div><div class="step active">CodeAct</div><div class="step">Memory</div><div class="step">Artifacts</div></div></div><pre id="mobile_out" class="mobile-output">Ready.</pre><div class="composer"><div class="composer-row"><button class="round" style="width:48px;height:48px" onclick="memory()">+</button><textarea id="mobile_msg" placeholder="Ask NEXUS anything..." style="height:140px"></textarea><button class="send" onclick="runMobile()">^</button></div></div></div><script>let busy=false;function setTheme(t){document.body.classList.toggle("light",t==="light");localStorage.nexusTheme=t}setTheme(localStorage.nexusTheme||"dark");function desktopTab(id,btn){document.querySelectorAll(".panel").forEach(p=>p.classList.remove("active"));document.getElementById(id).classList.add("active");document.querySelectorAll(".nav button").forEach(b=>b.classList.remove("active"));if(btn)btn.classList.add("active")}function setBusy(v){busy=v;document.getElementById("loader").classList.toggle("show",v);document.querySelectorAll("button").forEach(b=>b.disabled=v)}async function post(url,data){if(busy)return;setBusy(true);try{const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});const j=await r.json();out.textContent=JSON.stringify(j,null,2);if(document.getElementById("mobile_out"))mobile_out.textContent=JSON.stringify(j,null,2)}catch(e){out.textContent=JSON.stringify({ok:false,error:e.message},null,2)}setBusy(false)}function runAgent(){post("/api/agent",{message:agent_msg.value})}function runBrowser(){post("/api/browser",{url:browser_url.value,click_text:click_text.value})}function runCode(){post("/api/code",{code:code_text.value})}function runShell(){post("/api/shell",{command:shell_cmd.value})}async function memory(){const r=await fetch("/api/memory");const j=await r.json();out.textContent=JSON.stringify(j,null,2);if(document.getElementById("mobile_out"))mobile_out.textContent=JSON.stringify(j,null,2)}async function artifacts(){const r=await fetch("/api/artifacts");out.textContent=JSON.stringify(await r.json(),null,2)}function loadPrompt(){agent_msg.value="Act as a fully autonomous AI execution company operating in 2026. Identify one real-world operational opportunity capable of generating revenue within 14 days using browser automation, APIs, AI workflows, or operational intelligence. Generate market intelligence, opportunity scoring, technical architecture, deployment strategy, automation flow, customer acquisition strategy, outreach strategy, pricing model, pilot scope, risks, screenshots, JSON artifact, markdown report, and next actions. Constraints: solo operator, under $500 infrastructure, deployable within 72 hours, real public data only, practical execution only."}function mobileFill(v){mobile_msg.value=v}function runMobile(){post("/api/agent",{message:mobile_msg.value})}</script></body></html>
-'''
-@app.get("/", response_class=HTMLResponse)
-def root(): return HTML
-@app.get("/chat", response_class=HTMLResponse)
-def chat(): return HTML
-@app.get("/app", response_class=HTMLResponse)
-def app_page(): return HTML
-@app.get("/health")
-def health(): return {"ok":True,"status":"LIVE","version":"16.0-complete","uptime":int(time.time()-START)}
-@app.get("/api/data")
-def data(): return {"ok":True,"routes":["/chat","/api/agent","/api/browser","/api/code","/api/shell","/api/memory","/api/artifacts"]}
-@app.post("/api/agent")
-async def api_agent(task: ChatTask): return await run_agent(task.message)
-@app.post("/api/chat")
-async def api_chat(task: ChatTask): return await run_agent(task.message)
-@app.post("/api/browser")
-async def api_browser(task: BrowserTask):
-    if task.click_text: return await click_by_text(task.url, task.click_text)
-    return await extract_page(task.url)
-@app.post("/api/code")
-def api_code(task: CodeTask): return run_python(task.code)
-@app.post("/api/shell")
-def api_shell(task: ShellTask): return run_shell(task.command)
-@app.get("/api/memory")
-def api_memory(): return {"ok":True,"events":recent(30)}
-@app.get("/api/artifacts")
-def artifacts():
-    files=[]
-    for p in sorted(ART.glob("*"), reverse=True):
-        if p.is_file(): files.append({"name":p.name,"size":p.stat().st_size,"path":str(p)})
-    return {"ok":True,"files":files[:50]}
-@app.get("/api/artifact/{name}")
-def artifact(name: str):
-    p = ART / os.path.basename(name)
-    if not p.exists(): return {"ok":False,"error":"not found"}
-    return FileResponse(str(p))
-=======
-=======
->>>>>>> a184e838ce49b0b8d0c43e092b1d740e7245275c
+#!/usr/bin/env python3
+"""
+NEXUS OMEGA - AI Agent Command Center
+=====================================
+A fully autonomous AI execution platform with:
+- FastAPI backend on port 8000
+- Playwright browser automation
+- Agent loop with task planning and decomposition
+- Multi-source research and artifact generation
+- Telegram bot bridge
+- Shell/code sandbox execution
+- LLM integration (when OPENAI_API_KEY is set)
+
+All paths configurable via environment variables.
+Defaults to ./data for local deployment.
+"""
+
 import os
-import re
 import json
+import re
 import time
 import uuid
-import asyncio
-from datetime import datetime, timezone
-from typing import List, Optional
+from pathlib import Path
+from typing import Optional, List
 
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-try:
-    from playwright.async_api import async_playwright
-    PLAYWRIGHT = True
-except Exception:
-    PLAYWRIGHT = False
+from core.agent_loop import run_agent
+from core.browser_operator import extract_page, extract_urls
+from core.code_sandbox import run_python
+from core.shell_runner import run_shell
+from core.memory import log_event, recent
 
-BASE = "/home/cryptostoner94/nexus-omega"
-ART = f"{BASE}/artifacts"
-SCR = f"{BASE}/browser_screens"
+# ======== LLM Configuration ========
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
+OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+LLM_AVAILABLE = bool(OPENAI_API_KEY)
 
-os.makedirs(ART, exist_ok=True)
-os.makedirs(SCR, exist_ok=True)
+def call_llm(prompt: str, system: str = None, max_tokens: int = 4000) -> dict:
+    """
+    Call OpenAI-compatible LLM API.
+    Falls back to structured response if no API key.
+    """
+    if not LLM_AVAILABLE:
+        return {
+            "ok": False,
+            "error": "OPENAI_API_KEY not configured",
+            "available": False,
+        }
+    
+    try:
+        import urllib.request
+        import urllib.error
+        
+        headers = {
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
+            "Content-Type": "application/json",
+        }
+        
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+        
+        payload = {
+            "model": OPENAI_MODEL,
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "temperature": 0.7,
+        }
+        
+        data = json.dumps(payload).encode()
+        req = urllib.request.Request(
+            f"{OPENAI_BASE_URL}/chat/completions",
+            data=data,
+            headers=headers,
+            method="POST"
+        )
+        
+        with urllib.request.urlopen(req, timeout=120) as r:
+            response = json.loads(r.read())
+            return {
+                "ok": True,
+                "content": response["choices"][0]["message"]["content"],
+                "model": response.get("model", OPENAI_MODEL),
+                "usage": response.get("usage", {}),
+                "available": True,
+            }
+    except urllib.error.HTTPError as e:
+        return {
+            "ok": False,
+            "error": f"HTTP {e.code}: {e.reason}",
+            "available": True,
+        }
+    except Exception as e:
+        return {
+            "ok": False,
+            "error": str(e),
+            "available": True,
+        }
+
+# ======== Environment Configuration ========
+BASE = Path(os.getenv("NEXUS_BASE", "./data"))
+ART = BASE / "artifacts"
+SCREENS = BASE / "browser_screens"
+STATE = BASE / "state"
+STATE.mkdir(parents=True, exist_ok=True)
+ART.mkdir(parents=True, exist_ok=True)
+SCREENS.mkdir(parents=True, exist_ok=True)
 
 START = time.time()
-app = FastAPI(title="NEXUS OMEGA CLEAN", version="clean-chat-final")
+PLAYWRIGHT_AVAILABLE = False
 
+try:
+    from playwright.async_api import async_playwright as _pw
+    PLAYWRIGHT_AVAILABLE = True
+except Exception:
+    pass
 
-class Cmd(BaseModel):
-    command: str = ""
+def now():
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
-
+# ======== Pydantic Models ========
 class ChatTask(BaseModel):
     message: str = ""
-    prompt: str = ""
+    prompt: Optional[str] = None
 
+class BrowserCmd(BaseModel):
+    command: str
+
+class BrowserTask(BaseModel):
+    url: str
+    click_text: Optional[str] = None
+
+class CodeTask(BaseModel):
+    code: str
+
+class ShellTask(BaseModel):
+    command: str
 
 class ResearchTask(BaseModel):
     goal: str = ""
-    urls: Optional[List[str]] = None
-    niche: str = "AI automation"
-    max_urls: int = 4
+    urls: List[str] = []
+    max_urls: int = 5
     make_report: bool = True
 
+# ======== Helper Functions ========
+async def extract_many(urls: List[str], max_urls: int = 5):
+    """Extract from multiple URLs concurrently."""
+    results = []
+    for url in urls[:max_urls]:
+        try:
+            result = await extract_page(url)
+            results.append(result)
+        except Exception as e:
+            results.append({"ok": False, "url": url, "error": str(e)})
+    return results
 
-def now():
-    return datetime.now(timezone.utc).isoformat()
-
-
-def clean_text(value, limit=12000):
-    return re.sub(r"\s+", " ", value or "").strip()[:limit]
-
-
-def extract_urls(value):
-    return re.findall(r"https?://[^\s\"'<>]+", value or "")
-
-
-async def extract_page(url):
-    job_id = f"browser_{int(time.time())}_{uuid.uuid4().hex[:8]}"
-    screenshot = f"{SCR}/{job_id}.png"
-
-    if not PLAYWRIGHT:
-        return {"ok": False, "url": url, "error": "Playwright unavailable"}
-
-    try:
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(
-                headless=True,
-                args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
-            )
-            page = await browser.new_page(viewport={"width": 1365, "height": 900})
-            response = await page.goto(url, wait_until="domcontentloaded", timeout=30000)
-
-            try:
-                await page.wait_for_load_state("networkidle", timeout=8000)
-            except Exception:
-                pass
-
-            await page.wait_for_timeout(1000)
-            title = await page.title()
-
-            try:
-                text = await page.locator("body").inner_text(timeout=8000)
-            except Exception:
-                text = ""
-
-            try:
-                await page.screenshot(path=screenshot, full_page=True)
-            except Exception:
-                screenshot = None
-
-            await browser.close()
-
-            return {
-                "ok": True,
-                "id": job_id,
-                "url": url,
-                "status_code": response.status if response else None,
-                "title": title,
-                "text_preview": clean_text(text, 15000),
-                "text_length": len(text or ""),
-                "screenshot": screenshot,
-            }
-
-    except Exception as e:
-        return {"ok": False, "id": job_id, "url": url, "error": str(e)}
-
-
-async def extract_many(urls):
-    return await asyncio.gather(*(extract_page(url) for url in urls))
-
-
-def score_text(text):
-    text = (text or "").lower()
-    score = 0
-    signals = []
-
-    rules = {
-        "hiring": ["hiring", "jobs", "careers"],
-        "manual_work": ["manual", "spreadsheet", "admin", "workflow", "report"],
-        "automation_fit": ["automation", "agent", "api", "browser", "data"],
-        "revenue": ["pricing", "paid", "sales", "growth", "customer"],
-    }
-
-    for label, words in rules.items():
-        if any(word in text for word in words):
-            score += 2
-            signals.append(label)
-
-    return min(score, 10), signals
-
-
-def build_report(goal, results):
-    ranked = []
-
-    for item in results:
-        score, signals = score_text(item.get("text_preview", ""))
-        ranked.append(
-            {
-                "source": item.get("title") or item.get("url"),
-                "url": item.get("url"),
-                "score": score,
-                "signals": signals,
-                "screenshot": item.get("screenshot"),
-            }
-        )
-
-    ranked.sort(key=lambda x: x["score"], reverse=True)
+def generate_artifact(task_id: str, goal: str, results: List[dict]):
+    """Generate markdown and JSON artifacts."""
+    markdown_path = ART / f"{task_id}.md"
+    json_path = ART / f"{task_id}.json"
 
     lines = [
-        "# NEXUS OMEGA Execution Report",
-        "",
-        f"Generated: {now()}",
-        "",
-        "## Objective",
-        goal,
-        "",
-        "## Ranked Opportunities",
-        "| Rank | Source | Score | Signals | Pilot Offer |",
-        "|---:|---|---:|---|---|",
+        f"# NEXUS OMEGA Research Report",
+        f"",
+        f"**Task ID:** `{task_id}`",
+        f"**Goal:** {goal}",
+        f"**Generated:** {now()}",
+        f"",
+        f"## Extraction Results",
+        f"",
     ]
 
-    for i, row in enumerate(ranked, 1):
-        lines.append(
-            f"| {i} | {row['source']} | {row['score']} | {', '.join(row['signals'])} | $300-$750 72-hour pilot |"
-        )
+    for i, r in enumerate(results, 1):
+        if r.get("ok"):
+            lines += [
+                f"### {i}. {r.get('title', 'Untitled')}",
+                f"**URL:** {r.get('final_url', r.get('url', 'N/A'))}",
+                f"",
+                f"**Preview:**",
+                f"```",
+                f"{r.get('text_preview', '')[:3000]}",
+                f"```",
+                f"",
+            ]
 
-    lines += [
-        "",
-        "## Execution Plan",
-        "- Validate the lead manually.",
-        "- Offer a fixed 72-hour browser/API automation pilot.",
-        "- Deliver a small working automation and report.",
-        "- Convert successful pilot into recurring service.",
-        "",
-        "## Outreach Template",
-        "Subject: Quick automation pilot",
-        "",
-        "Hi {{name}},",
-        "",
-        "I noticed signs of repetitive workflow, reporting, support, or operational work.",
-        "I build small 72-hour browser/API automation pilots that reduce manual work and create usable reports.",
-        "",
-        "Would you be open to a short walkthrough this week?",
-    ]
-
-    return "\n".join(lines), ranked
-
-
-async def run_research(goal, urls=None, max_urls=4):
-    selected_urls = urls or extract_urls(goal)
-
-    if not selected_urls:
-        selected_urls = ["https://news.ycombinator.com", "https://github.com/trending"]
-
-    selected_urls = selected_urls[:max_urls]
-    results = await extract_many(selected_urls)
-    markdown, ranked = build_report(goal, results)
-
-    job_id = f"research_{int(time.time())}_{uuid.uuid4().hex[:8]}"
-    markdown_path = f"{ART}/{job_id}.md"
-    json_path = f"{ART}/{job_id}.json"
-
+    markdown = "\n".join(lines)
     payload = {
-        "ok": True,
-        "id": job_id,
-        "attempted_urls": selected_urls,
-        "successful_extractions": sum(1 for r in results if r.get("ok")),
-        "failed_extractions": sum(1 for r in results if not r.get("ok")),
-        "report_path": markdown_path,
-        "json_path": json_path,
-        "ranked": ranked,
+        "task_id": task_id,
+        "goal": goal,
+        "generated": now(),
+        "results_count": len(results),
         "results": results,
-        "preview": markdown[:2500],
     }
 
     with open(markdown_path, "w", encoding="utf-8") as f:
@@ -311,7 +206,34 @@ async def run_research(goal, urls=None, max_urls=4):
 
     return payload
 
+async def run_research(goal: str, urls: List[str], max_urls: int = 5):
+    """Run research by extracting from multiple URLs and generating artifacts."""
+    if not urls:
+        urls = ["https://news.ycombinator.com", "https://github.com/trending"]
 
+    task_id = f"research_{int(time.time())}_{uuid.uuid4().hex[:8]}"
+    log_event(task_id, "research_start", {"goal": goal, "urls": urls})
+
+    results = await extract_many(urls, max_urls)
+
+    artifact_payload = None
+    if results:
+        artifact_payload = generate_artifact(task_id, goal, results)
+
+    log_event(task_id, "research_done", {"results_count": len(results)})
+
+    return {
+        "ok": True,
+        "task_id": task_id,
+        "goal": goal,
+        "urls_processed": len(urls),
+        "results": results,
+        "artifact": artifact_payload,
+        "playwright_available": PLAYWRIGHT_AVAILABLE,
+        "message": "Research complete. Artifact generated." if artifact_payload else "No results returned."
+    }
+
+# ======== HTML Template ========
 HTML = """
 <!DOCTYPE html>
 <html>
@@ -341,7 +263,7 @@ pre{background:var(--input);border:1px solid var(--border);border-radius:14px;pa
 <div class="wrap">
 <div class="card">
 <h1>NEXUS OMEGA CHAT COMMAND CENTER</h1>
-<p class="small">Enter a normal objective, workflow, automation task, URL extraction, product-team task, or research command.</p>
+<p class="small">Enter a normal objective, workflow, automation task, URL extraction, or research command.</p>
 
 <textarea id="message">Find one AI automation opportunity that can generate revenue in 14 days and create a pilot execution plan.</textarea>
 
@@ -402,21 +324,21 @@ function loadPrompt(){
 </html>
 """
 
+# ======== FastAPI Application ========
+app = FastAPI(title="NEXUS OMEGA", version="16.0-complete")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 @app.get("/", response_class=HTMLResponse)
 def root():
     return HTML
 
-
 @app.get("/app", response_class=HTMLResponse)
 def app_page():
     return HTML
 
-
 @app.get("/chat", response_class=HTMLResponse)
 def chat_page():
     return HTML
-
 
 @app.get("/health")
 def health():
@@ -424,32 +346,17 @@ def health():
         "ok": True,
         "status": "LIVE",
         "uptime": int(time.time() - START),
-        "playwright": PLAYWRIGHT,
+        "playwright": PLAYWRIGHT_AVAILABLE,
+        "llm": {
+            "available": LLM_AVAILABLE,
+            "model": OPENAI_MODEL if LLM_AVAILABLE else None,
+        },
         "timestamp": now(),
-        "version": "clean-chat-final",
+        "version": "nexus-omega-fixed",
+        "base_path": str(BASE),
+        "artifacts_path": str(ART),
+        "screens_path": str(SCREENS),
     }
-
-
-@app.post("/api/browser")
-async def browser(cmd: Cmd):
-    found_urls = extract_urls(cmd.command)
-
-    if not found_urls:
-        return {"ok": False, "error": "Missing URL", "example": "extract https://example.com"}
-
-    results = await extract_many(found_urls[:3])
-    return results[0] if len(results) == 1 else {"ok": True, "results": results}
-
-
-@app.post("/api/research")
-async def research(task: ResearchTask):
-    return await run_research(task.goal, task.urls, task.max_urls)
-
-
-@app.post("/api/product-team")
-async def product_team(task: ResearchTask):
-    return await run_research(task.goal, task.urls, task.max_urls)
-
 
 @app.post("/api/chat")
 async def chat(task: ChatTask):
@@ -466,19 +373,78 @@ async def chat(task: ChatTask):
     if "health" in low or "status" in low:
         return {"ok": True, "mode": "health", "result": health()}
 
+    # If LLM is available, use it for intelligent response
+    if LLM_AVAILABLE:
+        # Extract URLs and context from message
+        found_urls = extract_urls(msg)
+        context = ""
+        
+        # If URLs found, extract content first
+        if found_urls:
+            extracted = await extract_many(found_urls[:3])
+            context_parts = []
+            for r in extracted:
+                if r.get("ok"):
+                    context_parts.append(f"URL: {r.get('final_url', r.get('url'))}\nTitle: {r.get('title', '')}\nContent: {r.get('text_preview', '')[:2000]}")
+            context = "\n\n".join(context_parts)
+        
+        # Build prompt for LLM
+        system_prompt = """You are NEXUS OMEGA, an advanced AI agent execution system. You help users with:
+- Task planning and decomposition
+- Browser automation and research
+- Code execution and debugging
+- Revenue opportunity identification
+- Automation workflow design
+
+Always be practical, action-oriented, and provide specific next steps."""
+
+        user_prompt = f"User request: {msg}"
+        if context:
+            user_prompt += f"\n\nContext from web extraction:\n{context}"
+        
+        user_prompt += "\n\nProvide a structured response with:\n1. Understanding\n2. Action plan\n3. Specific steps\n4. Expected outcome"
+        
+        llm_response = call_llm(user_prompt, system=system_prompt)
+        
+        if llm_response.get("ok"):
+            # Save LLM response as artifact
+            task_id = f"llm_{int(time.time())}_{uuid.uuid4().hex[:8]}"
+            artifact_payload = generate_artifact(task_id, msg, [{"title": "LLM Response", "ok": True, "text_preview": llm_response.get("content", "")}])
+            log_event(task_id, "llm_response", {"prompt": msg, "model": llm_response.get("model")})
+            
+            return {
+                "ok": True,
+                "mode": "llm-reasoning",
+                "llm_model": llm_response.get("model"),
+                "llm_usage": llm_response.get("usage", {}),
+                "result": llm_response.get("content"),
+                "artifact": artifact_payload,
+            }
+        else:
+            # LLM call failed, fall back to research
+            return {
+                "ok": True,
+                "mode": "llm-fallback",
+                "llm_error": llm_response.get("error"),
+                "result": await run_research(msg, found_urls if found_urls else ["https://news.ycombinator.com", "https://github.com/trending"], 2),
+            }
+
+    # No LLM - use browser-based research
     found_urls = extract_urls(msg)
 
     if found_urls or "extract" in low or "browser" in low:
+        url = found_urls[0] if found_urls else "https://example.com"
+        result = await extract_page(url)
         return {
             "ok": True,
             "mode": "browser",
-            "result": await browser(Cmd(command=msg)),
+            "result": result,
         }
 
     return {
         "ok": True,
-        "mode": "agent-execution",
-        "understanding": "Objective routed to research, scoring, artifact generation, and execution planning.",
+        "mode": "research-only",
+        "understanding": "Objective routed to research, scoring, and artifact generation.",
         "result": await run_research(
             goal=msg,
             urls=["https://news.ycombinator.com", "https://github.com/trending"],
@@ -486,56 +452,120 @@ async def chat(task: ChatTask):
         ),
     }
 
+@app.post("/api/browser")
+async def browser(cmd: BrowserCmd):
+    found_urls = extract_urls(cmd.command)
+
+    if not found_urls:
+        return {"ok": False, "error": "Missing URL", "example": "extract https://example.com"}
+
+    results = await extract_many(found_urls[:3])
+    return results[0] if len(results) == 1 else {"ok": True, "results": results}
+
+@app.post("/api/research")
+async def research(task: ResearchTask):
+    return await run_research(task.goal, task.urls, task.max_urls)
+
+@app.post("/api/product-team")
+async def product_team(task: ResearchTask):
+    return await run_research(task.goal, task.urls, task.max_urls)
 
 @app.get("/api/artifacts")
 def artifacts():
     files = []
-
     for name in sorted(os.listdir(ART), reverse=True):
         path = f"{ART}/{name}"
         if os.path.isfile(path):
             files.append({"name": name, "size": os.path.getsize(path), "path": path})
-
     return {"ok": True, "count": len(files), "files": files[:50]}
-
 
 @app.get("/api/artifact/{name}")
 def artifact(name: str):
     path = f"{ART}/{os.path.basename(name)}"
-
     if not os.path.exists(path):
         return {"ok": False, "error": "not found"}
-
     return FileResponse(path)
-
 
 @app.get("/api/data")
 def data():
     return {
         "ok": True,
         "routes": [
-            "/",
-            "/app",
-            "/chat",
+            "/", "/app", "/chat",
             "/health",
-            "/api/chat",
-            "/api/browser",
-            "/api/research",
-            "/api/product-team",
-            "/api/artifacts",
+            "/api/chat", "/api/browser", "/api/research", "/api/product-team",
+            "/api/artifacts", "/api/artifact/{name}",
+            "/api/exec", "/api/code", "/api/events", "/api/llm",
         ],
         "capabilities": [
-            "chat command input",
-            "browser extraction",
-            "research execution",
-            "product-team workflow",
-            "artifact generation",
-            "markdown report",
-            "json report",
-            "screenshots",
+            "chat command input", "browser extraction", "research execution",
+            "product-team workflow", "artifact generation",
+            "markdown report", "json report", "screenshots",
+            "code sandbox", "shell execution", "event logging",
+            "llm reasoning" if LLM_AVAILABLE else "llm-disabled",
         ],
+        "playwright": PLAYWRIGHT_AVAILABLE,
+        "llm": {
+            "available": LLM_AVAILABLE,
+            "model": OPENAI_MODEL if LLM_AVAILABLE else None,
+            "base_url": OPENAI_BASE_URL if LLM_AVAILABLE else None,
+        },
     }
-<<<<<<< HEAD
->>>>>>> 1b2cdf6b929ec30998e89b432c04cbe093b52f38
-=======
->>>>>>> a184e838ce49b0b8d0c43e092b1d740e7245275c
+
+@app.post("/api/exec")
+async def exec_shell(task: ShellTask):
+    result = run_shell(task.command)
+    return result
+
+@app.post("/api/code")
+async def exec_code(task: CodeTask):
+    result = run_python(task.code)
+    return result
+
+@app.get("/api/events")
+def events(limit: int = 30):
+    return {"ok": True, "events": recent(limit)}
+
+@app.get("/api/screens")
+def screens():
+    """List browser screenshots."""
+    files = []
+    for name in sorted(os.listdir(SCREENS), reverse=True):
+        path = f"{SCREENS}/{name}"
+        if os.path.isfile(path) and name.endswith('.png'):
+            files.append({"name": name, "size": os.path.getsize(path), "path": path})
+    return {"ok": True, "count": len(files), "screenshots": files[:20]}
+
+@app.post("/api/llm")
+async def llm_chat(req: Request):
+    """Direct LLM chat endpoint for advanced reasoning."""
+    body = await req.json()
+    prompt = body.get("prompt", "")
+    system = body.get("system", "")
+    max_tokens = body.get("max_tokens", 4000)
+    
+    if not prompt:
+        return {"ok": False, "error": "prompt is required"}
+    
+    result = call_llm(prompt, system=system, max_tokens=max_tokens)
+    return result
+
+@app.get("/api/llm/models")
+def llm_models():
+    """List available LLM models."""
+    return {
+        "ok": True,
+        "available": LLM_AVAILABLE,
+        "current_model": OPENAI_MODEL if LLM_AVAILABLE else None,
+        "base_url": OPENAI_BASE_URL,
+        "supported": [
+            "gpt-4o", "gpt-4-turbo", "gpt-4", "gpt-3.5-turbo",
+            "claude-3-opus", "claude-3-sonnet", "claude-3-haiku",
+            # Add compatible endpoints for other providers
+        ] if LLM_AVAILABLE else [],
+    }
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.getenv("PORT", "8000"))
+    uvicorn.run(app, host="0.0.0.0", port=port)

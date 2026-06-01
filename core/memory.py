@@ -1,7 +1,8 @@
+import os
 import sqlite3, json, time
 from pathlib import Path
  
-BASE = Path("/opt/nexus-omega")
+BASE = Path(os.getenv("NEXUS_BASE", "./data"))
 STATE = BASE / "state"
 STATE.mkdir(parents=True, exist_ok=True)
 DB = STATE / "memory.sqlite3"

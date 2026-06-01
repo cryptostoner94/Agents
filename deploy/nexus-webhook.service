@@ -1,0 +1,18 @@
+[Unit]
+Description=NEXUS OMEGA - GitHub Webhook Receiver
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/nexus-omega
+Environment="NEXUS_BASE=/opt/nexus-omega/data"
+ExecStart=/usr/bin/python3 /opt/nexus-omega/deploy/webhook_server.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

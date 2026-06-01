@@ -1,0 +1,26 @@
+[Unit]
+Description=AGENTS AI Agent Platform
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/Agents
+Environment="NEXUS_BASE=/home/ubuntu/Agents/data"
+Environment="PORT=8000"
+EnvironmentFile=-/home/ubuntu/Agents/.env
+ExecStart=/usr/bin/python3 -m uvicorn api_main:app --host 0.0.0.0 --port 8000 --workers 2
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/home/ubuntu/Agents/data
+
+[Install]
+WantedBy=multi-user.target
