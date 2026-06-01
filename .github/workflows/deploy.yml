@@ -1,38 +1,38 @@
 name: Deploy to EC2
 
 on:
-    push:
-        branches: [main]
-    workflow_dispatch:
+  push:
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
-    deploy:
-        runs-on: ubuntu-latest
-        steps:
-            - name: Checkout code
-              uses: actions/checkout@v4
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-            - name: Setup Python
-              uses: actions/setup-python@v5
-              with:
-                  python-version: '3.11'
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-            - name: Install dependencies
-              run: pip install -r requirements.txt
+      - name: Install dependencies
+        run: pip install -r requirements.txt
 
-            - name: Deploy to EC2
-              env:
-                  EC2_HOST: ${{ secrets.EC2_HOST }}
-                  EC2_USER: ${{ secrets.EC2_USER }}
-                  EC2_KEY: ${{ secrets.EC2_SSH_KEY }}
-              run: |
-                  echo "$EC2_KEY" > ec2_key.pem
-                  chmod 600 ec2_key.pem
-                  
-                  ssh -o StrictHostKeyChecking=no -i ec2_key.pem $EC2_USER@$EC2_HOST << 'ENDSSH'
-                    cd ~/Agents
-                    
-                    echo '[Unit]
+      - name: Deploy to EC2
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_KEY: ${{ secrets.EC2_SSH_KEY }}
+        run: |
+          echo "$EC2_KEY" > ec2_key.pem
+          chmod 600 ec2_key.pem
+
+          ssh -o StrictHostKeyChecking=no -i ec2_key.pem $EC2_USER@$EC2_HOST << 'ENDSSH'
+            cd ~/Agents
+
+            echo '[Unit]
 Description=AGENTS AI Agent Platform
 After=network.target
 
@@ -45,13 +45,13 @@ Restart=always
 
 [Install]
 WantedBy=multi-user.target' | sudo tee /etc/systemd/system/Agents.service
-                    
-                    sudo systemctl daemon-reload
-                    sudo systemctl enable Agents
-                    sudo systemctl restart Agents
-                    
-                    sleep 5
-                    curl -sf http://127.0.0.1:8000/health && echo "✅ DEPLOYED SUCCESSFULLY" || echo "❌ Check logs: journalctl -u Agents -n 20"
-                  ENDSSH
-                  
-                  rm ec2_key.pem
+
+            sudo systemctl daemon-reload
+            sudo systemctl enable Agents
+            sudo systemctl restart Agents
+
+            sleep 5
+            curl -sf http://127.0.0.1:8000/health && echo "✅ DEPLOYED SUCCESSFULLY" || echo "❌ Check logs: journalctl -u Agents -n 20"
+          ENDSSH
+
+          rm ec2_key.pem
