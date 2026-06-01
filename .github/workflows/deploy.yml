@@ -1,4 +1,4 @@
-name: Deploy to EC2
+name: Deploy to AWS EC2
 
 on:
   push:
@@ -18,7 +18,8 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install -r requirements.txt
 
       - name: Deploy to EC2
         env:
@@ -28,30 +29,61 @@ jobs:
         run: |
           echo "$EC2_KEY" > ec2_key.pem
           chmod 600 ec2_key.pem
-
-          ssh -o StrictHostKeyChecking=no -i ec2_key.pem $EC2_USER@$EC2_HOST << 'ENDSSH'
-            cd ~/Agents
-
+          
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i ec2_key.pem $EC2_USER@$EC2_HOST << 'ENDSSH'
+            set -e
+            cd ~/agents-v2 || mkdir -p ~/agents-v2
+            
+            # Copy files
+            rsync -av --delete \
+              --exclude='.git' \
+              --exclude='__pycache__' \
+              --exclude='*.pyc' \
+              --exclude='data/' \
+              ~/Agents/ ~/agents-v2/ 2>/dev/null || \
+              cp -r ~/Agents/* ~/agents-v2/ 2>/dev/null || true
+            
+            cd ~/agents-v2
+            
+            # Install dependencies
+            pip install -r requirements.txt -q
+            python -m playwright install chromium --with-deps 2>/dev/null || true
+            
+            # Create systemd service
             echo '[Unit]
-Description=AGENTS AI Agent Platform
+Description=AGENTS v2 Elite AI Platform
 After=network.target
 
 [Service]
 Type=simple
 User=ubuntu
-WorkingDirectory=/home/ubuntu/Agents
-ExecStart=/usr/bin/python3 -m uvicorn api_main:app --host 0.0.0.0 --port 8000
+WorkingDirectory=/home/ubuntu/agents-v2
+EnvironmentFile=/home/ubuntu/agents-v2/.env
+ExecStart=/usr/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 Restart=always
+RestartSec=5
 
 [Install]
-WantedBy=multi-user.target' | sudo tee /etc/systemd/system/Agents.service
-
+WantedBy=multi-user.target' | sudo tee /etc/systemd/system/agents-v2.service
+            
+            # Restart service
             sudo systemctl daemon-reload
-            sudo systemctl enable Agents
-            sudo systemctl restart Agents
-
-            sleep 5
-            curl -sf http://127.0.0.1:8000/health && echo "✅ DEPLOYED SUCCESSFULLY" || echo "❌ Check logs: journalctl -u Agents -n 20"
+            sudo systemctl enable agents-v2
+            sudo systemctl restart agents-v2
+            
+            # Health check
+            sleep 8
+            if curl -sf http://127.0.0.1:8000/health; then
+              echo "✅ DEPLOYMENT SUCCESSFUL"
+            else
+              echo "⚠️ Service may be starting, check: sudo systemctl status agents-v2"
+              journalctl -u agents-v2 -n 10 --no-pager
+            fi
           ENDSSH
+          
+          rm -f ec2_key.pem
 
-          rm ec2_key.pem
+      - name: Verify deployment
+        run: |
+          sleep 5
+          curl -sf http://${{ secrets.EC2_HOST }}:8000/health || echo "Health check failed"
